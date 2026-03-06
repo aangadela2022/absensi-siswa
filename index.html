@@ -79,9 +79,11 @@
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="min-h-screen pb-20">
+<body class="min-h-screen pb-10">
 
     <!-- Navigasi Utama -->
     <nav class="sticky top-0 z-50 px-4 py-4">
@@ -111,7 +113,6 @@
     <main class="max-w-5xl mx-auto p-4 lg:p-6">
         <!-- TAB SCANNER -->
         <section id="tab-scan" class="tab-content space-y-6">
-            <!-- Statistik Baru dengan Persentase -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="glass-card p-6 rounded-[32px] relative overflow-hidden group">
                     <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Scan Hari Ini</p>
@@ -122,19 +123,18 @@
                 </div>
 
                 <div class="glass-card p-6 rounded-[32px] relative overflow-hidden group">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tingkat Kehadiran</p>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Kehadiran</p>
                     <div class="flex items-baseline gap-2">
                         <h3 id="stat-percentage" class="text-4xl font-extrabold text-blue-600">0%</h3>
-                        <span class="text-xs font-bold text-slate-400">Target</span>
+                        <span class="text-xs font-bold text-slate-400 text-uppercase">Sekolah</span>
                     </div>
-                    <!-- Progress Bar Minimalis -->
                     <div class="w-full h-1.5 bg-slate-100 rounded-full mt-4 overflow-hidden">
                         <div id="progress-bar-attendance" class="h-full bg-blue-600 transition-all duration-700 w-0"></div>
                     </div>
                 </div>
                 
                 <div class="glass-card p-6 rounded-[32px] md:col-span-2 overflow-hidden">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Penyebaran Kehadiran Per Kelas</p>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Penyebaran & % Per Kelas</p>
                     <div id="stat-class-summary" class="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
                         <span class="text-xs font-medium text-slate-400 italic">Belum ada aktivitas...</span>
                     </div>
@@ -142,24 +142,18 @@
             </div>
 
             <div class="grid lg:grid-cols-5 gap-6">
-                <!-- Kolom Kamera -->
                 <div class="lg:col-span-3 space-y-4">
                     <div class="glass-card p-3 rounded-[40px] relative">
                         <div class="scan-overlay">
                             <div class="scan-line"></div>
                             <div id="reader" class="bg-slate-900 aspect-square md:aspect-video"></div>
                         </div>
-                        
                         <button onclick="openManualModal()" class="absolute bottom-6 right-6 neo-button bg-white/90 hover:bg-white text-blue-600 px-4 py-3 rounded-2xl flex items-center gap-2 shadow-2xl border border-blue-100/50 z-20">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                             <span class="text-xs font-black uppercase tracking-widest">Input Manual</span>
                         </button>
                     </div>
-                    
                     <div id="feedback" class="p-5 rounded-[24px] hidden text-center font-bold text-sm animate-pulse border"></div>
-
                     <div class="flex items-center justify-between px-4">
                         <div id="status-cloud" class="flex items-center gap-2 bg-white/50 px-4 py-2 rounded-full border border-white shadow-sm">
                             <span id="cloud-indicator" class="w-2 h-2 bg-slate-300 rounded-full"></span>
@@ -169,7 +163,6 @@
                     </div>
                 </div>
 
-                <!-- Kolom Log Aktivitas -->
                 <div class="lg:col-span-2">
                     <div class="glass-card rounded-[40px] p-6 h-full flex flex-col min-h-[400px]">
                         <div class="flex justify-between items-center mb-6">
@@ -203,7 +196,6 @@
                     </div>
                 </div>
 
-                <!-- Form Input Tunggal -->
                 <div id="area-input-tunggal" class="mb-10">
                     <form id="form-siswa" class="grid grid-cols-1 md:grid-cols-10 gap-3">
                         <div class="md:col-span-2">
@@ -221,7 +213,6 @@
                     </form>
                 </div>
 
-                <!-- Area Impor -->
                 <div id="area-import-massal" class="hidden mb-10 p-6 bg-slate-50 rounded-[32px] border-2 border-dashed border-slate-200">
                     <h4 class="font-bold text-slate-800 mb-4 text-xs uppercase tracking-widest">📦 Salin dari Excel (ID - Nama - Kelas)</h4>
                     <textarea id="import-area" rows="4" class="w-full p-5 rounded-2xl bg-white border-none shadow-inner text-xs font-mono mb-4 outline-none" placeholder="001	Budi Santoso	XII RPL 1"></textarea>
@@ -231,7 +222,6 @@
                     </div>
                 </div>
 
-                <!-- Area Backup -->
                 <div id="area-backup-data" class="hidden mb-10 p-8 bg-slate-900 rounded-[32px] text-white">
                     <div class="grid md:grid-cols-2 gap-8">
                         <div>
@@ -278,6 +268,13 @@
         </section>
     </main>
 
+    <!-- Footer Credit -->
+    <footer class="mt-8 mb-6 text-center">
+        <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+            Created by <span class="text-blue-600">Aang Adela</span>
+        </p>
+    </footer>
+
     <!-- MODAL INPUT MANUAL -->
     <div id="modal-manual" class="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-overlay hidden">
         <div class="glass-card w-full max-w-md p-8 rounded-[40px] shadow-2xl border border-white">
@@ -300,7 +297,17 @@
         let logAbsen = [];
         let scriptURL = localStorage.getItem('abs_url') || "";
 
-        // Fungsi Navigasi Tab
+        // Fungsi Suara (Text to Speech)
+        function playVoice(text) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'id-ID';
+                utterance.rate = 1.1;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
         function switchTab(id) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.getElementById(`tab-${id}`).classList.remove('hidden');
@@ -316,19 +323,17 @@
             });
             if(id === 'scan') {
                 updateCloudStatus();
-                updateScannerUI(); // Refresh persentase saat kembali ke tab scan
+                updateScannerUI();
             }
             if(id === 'master') renderTableSiswa();
         }
 
-        // Jam Digital
         function updateClock() {
             const now = new Date();
             document.getElementById('clock-display').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
         }
         setInterval(updateClock, 1000);
 
-        // Status Koneksi Cloud
         function updateCloudStatus() {
             const ind = document.getElementById('cloud-indicator');
             const txt = document.getElementById('cloud-text');
@@ -343,21 +348,14 @@
             }
         }
 
-        // --- MANAJEMEN DATABASE SISWA ---
-
-        // Render Tabel Siswa
         function renderTableSiswa() {
             const container = document.getElementById('tabel-siswa');
             document.getElementById('count-siswa').innerText = dbSiswa.length;
-            
-            // Urutkan berdasarkan nama untuk tampilan
             const sorted = [...dbSiswa].sort((a, b) => a.nama.localeCompare(b.nama));
-            
             if (sorted.length === 0) {
                 container.innerHTML = `<tr><td colspan="4" class="p-10 text-center text-slate-400 text-xs italic font-bold uppercase tracking-widest opacity-50">Belum ada data siswa</td></tr>`;
                 return;
             }
-
             container.innerHTML = sorted.map(s => `
                 <tr class="hover:bg-slate-50/50 group transition-colors">
                     <td class="p-5 font-mono font-bold text-blue-600 text-xs">${s.id}</td>
@@ -365,72 +363,44 @@
                     <td class="p-5"><span class="px-3 py-1 bg-white border border-slate-100 rounded-lg text-[10px] font-black text-slate-500 uppercase">${s.kelas}</span></td>
                     <td class="p-5 text-center">
                         <button onclick="hapusSiswa('${s.id}')" class="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                         </button>
                     </td>
                 </tr>
             `).join('');
         }
 
-        // Hapus Siswa berdasarkan ID Unik
         function hapusSiswa(id) {
             const siswa = dbSiswa.find(s => s.id === id);
             if(!siswa) return;
-
-            if(confirm(`Apakah Anda yakin ingin menghapus data siswa: ${siswa.nama} (${siswa.id})?`)) {
+            if(confirm(`Apakah Anda yakin ingin menghapus data siswa: ${siswa.nama}?`)) {
                 dbSiswa = dbSiswa.filter(s => s.id !== id);
                 saveSiswa();
                 renderTableSiswa();
+                updateScannerUI();
             }
         }
 
-        // Tambah Siswa Tunggal
         document.getElementById('form-siswa').addEventListener('submit', function(e) {
             e.preventDefault();
             const id = document.getElementById('in-id').value.trim();
             const nama = document.getElementById('in-nama').value.trim();
             const kelas = document.getElementById('in-kelas').value.trim();
-            
-            if(dbSiswa.find(s => s.id === id)) {
-                return alert("ID/NIS ini sudah digunakan oleh siswa lain!");
-            }
-            
+            if(dbSiswa.find(s => s.id === id)) return alert("ID sudah digunakan!");
             dbSiswa.push({ id, nama, kelas });
-            saveSiswa(); 
-            this.reset(); 
-            renderTableSiswa();
+            saveSiswa(); this.reset(); renderTableSiswa();
+            updateScannerUI();
         });
 
-        // Simpan ke LocalStorage
-        function saveSiswa() { 
-            localStorage.setItem('abs_students', JSON.stringify(dbSiswa)); 
-        }
+        function saveSiswa() { localStorage.setItem('abs_students', JSON.stringify(dbSiswa)); }
 
-        // --- MANAJEMEN MODAL & UI ---
-
-        function openManualModal() { 
-            document.getElementById('modal-manual').classList.remove('hidden');
-            document.getElementById('manual-nis').focus();
-        }
-        
-        function closeManualModal() { 
-            document.getElementById('modal-manual').classList.add('hidden');
-            document.getElementById('manual-nis').value = "";
-        }
-
-        function prosesManualAbsen() {
-            const nis = document.getElementById('manual-nis').value.trim();
-            if(!nis) return;
-            onScanSuccess(nis);
-            closeManualModal();
-        }
+        function openManualModal() { document.getElementById('modal-manual').classList.remove('hidden'); document.getElementById('manual-nis').focus(); }
+        function closeManualModal() { document.getElementById('modal-manual').classList.add('hidden'); document.getElementById('manual-nis').value = ""; }
+        function prosesManualAbsen() { const nis = document.getElementById('manual-nis').value.trim(); if(!nis) return; onScanSuccess(nis); closeManualModal(); }
 
         function toggleImportMode() { document.getElementById('area-import-massal').classList.toggle('hidden'); }
         function toggleBackupMode() { document.getElementById('area-backup-data').classList.toggle('hidden'); }
 
-        // Impor Massal
         function prosesImport() {
             const text = document.getElementById('import-area').value;
             const lines = text.split('\n');
@@ -445,18 +415,15 @@
                     }
                 }
             });
-            saveSiswa(); 
-            renderTableSiswa(); 
-            toggleImportMode();
+            saveSiswa(); renderTableSiswa(); toggleImportMode();
             document.getElementById('import-area').value = "";
+            updateScannerUI();
             alert(`Berhasil mengimpor ${added} siswa.`);
         }
 
-        // Backup & Restore
         function eksporDataSiswa() {
             const code = btoa(unescape(encodeURIComponent(JSON.stringify(dbSiswa))));
-            navigator.clipboard.writeText(code); 
-            alert("Kode backup berhasil disalin!");
+            navigator.clipboard.writeText(code); alert("Kode backup disalin!");
         }
 
         function imporDataSiswa() {
@@ -465,72 +432,65 @@
             try {
                 const data = JSON.parse(decodeURIComponent(escape(atob(code))));
                 if(confirm(`Pulihkan data ${data.length} siswa?`)) {
-                    dbSiswa = data; 
-                    saveSiswa(); 
-                    renderTableSiswa(); 
+                    dbSiswa = data; saveSiswa(); renderTableSiswa();
                     document.getElementById('backup-code-input').value = "";
-                    alert("Database berhasil dipulihkan!");
+                    updateScannerUI();
+                    alert("Berhasil!");
                 }
-            } catch(e) { alert("Kode backup tidak valid!"); }
+            } catch(e) { alert("Kode tidak valid!"); }
         }
-
-        // --- LOGIKA SCANNER ---
 
         const html5QrCode = new Html5Qrcode("reader");
         
         function onScanSuccess(decodedText) {
             const raw = decodedText.trim();
             const siswa = dbSiswa.find(s => s.id.toLowerCase() === raw.toLowerCase());
-
             if (siswa) {
                 if (logAbsen.find(l => l.id === siswa.id)) {
-                    notify(`⚠️ DUPLIKAT: ${siswa.nama}`, "border-amber-200 bg-amber-50 text-amber-700");
+                    notify(`⚠️ DUPLIKAT: ${siswa.nama}`, "border-amber-200 bg-amber-50 text-amber-700", "Sudah absen");
                     return;
                 }
                 const now = new Date();
                 const entri = {
-                    id: siswa.id, 
-                    nama: siswa.nama, 
-                    kelas: siswa.kelas,
+                    id: siswa.id, nama: siswa.nama, kelas: siswa.kelas,
                     jam: now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
                     tgl: now.toLocaleDateString('id-ID')
                 };
                 logAbsen.unshift(entri);
-                updateScannerUI();
-                kirimKeCloud(entri);
-                notify(`✅ HADIR: ${siswa.nama}`, "border-emerald-200 bg-emerald-50 text-emerald-700");
+                updateScannerUI(); kirimKeCloud(entri);
+                notify(`✅ HADIR: ${siswa.nama}`, "border-emerald-200 bg-emerald-50 text-emerald-700", `${siswa.nama} hadir`);
             } else {
-                notify(`❌ GAGAL: ID ${raw} Tidak Terdaftar`, "border-red-200 bg-red-50 text-red-700");
+                notify(`❌ GAGAL: ID ${raw} Tidak Terdaftar`, "border-red-200 bg-red-50 text-red-700", "ID tidak dikenal");
             }
         }
 
-        function notify(msg, cls) {
+        function notify(msg, cls, speechText) {
             const el = document.getElementById('feedback');
             el.className = `p-5 rounded-[24px] font-bold text-sm border shadow-sm transition-all animate-bounce ${cls}`;
-            el.innerText = msg; 
-            el.classList.remove('hidden');
+            el.innerText = msg; el.classList.remove('hidden');
+            
+            // Panggil fungsi suara
+            if (speechText) playVoice(speechText);
+
             setTimeout(() => el.classList.add('hidden'), 3000);
         }
 
         function updateScannerUI() {
             const totalHadir = logAbsen.length;
             const totalSiswa = dbSiswa.length;
-            const persentase = totalSiswa > 0 ? Math.round((totalHadir / totalSiswa) * 100) : 0;
-
-            // Update Statistik Teks
+            const persentaseSekolah = totalSiswa > 0 ? Math.round((totalHadir / totalSiswa) * 100) : 0;
+            
             document.getElementById('stat-total-scan').innerText = totalHadir;
-            document.getElementById('stat-percentage').innerText = `${persentase}%`;
+            document.getElementById('stat-percentage').innerText = `${persentaseSekolah}%`;
             
-            // Update Progress Bar
             const progBar = document.getElementById('progress-bar-attendance');
-            progBar.style.width = `${persentase}%`;
+            progBar.style.width = `${persentaseSekolah}%`;
             
-            // Warna dinamis progress bar
-            if(persentase > 80) progBar.className = "h-full bg-emerald-500 transition-all duration-700";
-            else if(persentase > 50) progBar.className = "h-full bg-blue-600 transition-all duration-700";
+            if(persentaseSekolah > 80) progBar.className = "h-full bg-emerald-500 transition-all duration-700";
+            else if(persentaseSekolah > 50) progBar.className = "h-full bg-blue-600 transition-all duration-700";
             else progBar.className = "h-full bg-amber-500 transition-all duration-700";
-
-            // Update Log Container
+            
+            // Update Log Visual
             const logBox = document.getElementById('log-container');
             if(logAbsen.length === 0) {
                 logBox.innerHTML = `<div class="h-full flex flex-col items-center justify-center opacity-20 py-20"><p class="text-xs font-bold uppercase tracking-widest">Siap Memindai</p></div>`;
@@ -538,76 +498,71 @@
                 logBox.innerHTML = logAbsen.map(l => `
                     <div class="glass-card p-4 rounded-3xl border-l-4 border-l-blue-500 animate-in slide-in-from-right duration-500">
                         <div class="flex justify-between items-start">
-                            <div>
-                                <h4 class="font-extrabold text-slate-800 text-sm leading-tight">${l.nama}</h4>
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">${l.kelas}</p>
-                            </div>
+                            <div><h4 class="font-extrabold text-slate-800 text-sm leading-tight">${l.nama}</h4><p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">${l.kelas}</p></div>
                             <span class="text-blue-600 font-black text-sm font-mono">${l.jam}</span>
                         </div>
                     </div>
                 `).join('');
             }
 
-            // Update Statistik Per Kelas
-            const kelasMap = {};
-            logAbsen.forEach(l => kelasMap[l.kelas] = (kelasMap[l.kelas] || 0) + 1);
-            const sumBox = document.getElementById('stat-class-summary');
-            sumBox.innerHTML = Object.entries(kelasMap).map(([k, v]) => `
-                <div class="bg-white/80 border border-white px-4 py-2 rounded-2xl flex items-center gap-3 shrink-0 shadow-sm">
-                    <span class="text-[10px] font-black text-slate-400 uppercase">${k}</span>
-                    <span class="text-sm font-black text-blue-600">${v}</span>
-                </div>
-            `).join('');
-        }
+            // Hitung Kehadiran Per Kelas & Persentasenya
+            const masterKelasCount = {}; // Total siswa per kelas di DB
+            dbSiswa.forEach(s => masterKelasCount[s.kelas] = (masterKelasCount[s.kelas] || 0) + 1);
 
-        function resetLog() {
-            if(confirm("Bersihkan tampilan log hari ini?")) { 
-                logAbsen = []; 
-                updateScannerUI(); 
+            const hadirKelasCount = {}; // Siswa yang sudah hadir per kelas
+            logAbsen.forEach(l => hadirKelasCount[l.kelas] = (hadirKelasCount[l.kelas] || 0) + 1);
+
+            const sumBox = document.getElementById('stat-class-summary');
+            const kelasList = Object.keys(masterKelasCount).sort();
+
+            if (kelasList.length === 0) {
+                sumBox.innerHTML = `<span class="text-xs font-medium text-slate-400 italic">Database kosong...</span>`;
+            } else {
+                sumBox.innerHTML = kelasList.map(kelas => {
+                    const totalSiswaKelas = masterKelasCount[kelas];
+                    const hadirSiswaKelas = hadirKelasCount[kelas] || 0;
+                    const persenKelas = Math.round((hadirSiswaKelas / totalSiswaKelas) * 100);
+                    
+                    // Warna indikator kecil berdasarkan persentase
+                    const dotColor = persenKelas === 100 ? 'bg-emerald-500' : (persenKelas > 0 ? 'bg-blue-500' : 'bg-slate-300');
+
+                    return `
+                        <div class="bg-white/80 border border-white px-4 py-2.5 rounded-2xl flex flex-col gap-1 shrink-0 shadow-sm min-w-[120px]">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[9px] font-black text-slate-400 uppercase">${kelas}</span>
+                                <span class="w-1.5 h-1.5 ${dotColor} rounded-full"></span>
+                            </div>
+                            <div class="flex items-baseline justify-between gap-2">
+                                <span class="text-sm font-black text-slate-800">${hadirSiswaKelas}<span class="text-[10px] text-slate-400 font-bold">/${totalSiswaKelas}</span></span>
+                                <span class="text-xs font-black text-blue-600">${persenKelas}%</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
             }
         }
 
-        // --- SETTINGS ---
+        function resetLog() { if(confirm("Bersihkan log hari ini?")) { logAbsen = []; updateScannerUI(); } }
 
         function simpanURL() {
             const url = document.getElementById('url-script').value.trim();
             if(url.includes('google.com')) {
-                localStorage.setItem('abs_url', url); 
-                scriptURL = url;
-                updateCloudStatus(); 
-                alert("Berhasil menghubungkan ke Cloud!");
-            } else {
-                alert("URL tidak valid.");
-            }
+                localStorage.setItem('abs_url', url); scriptURL = url;
+                updateCloudStatus(); alert("Cloud Terhubung!");
+            } else alert("URL tidak valid.");
         }
 
         async function kirimKeCloud(d) {
             if(!scriptURL) return;
-            try {
-                await fetch(scriptURL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify([d.tgl, d.id, d.nama, d.kelas, d.jam])
-                });
-            } catch(e) { console.error("Cloud Error", e); }
+            try { await fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: JSON.stringify([d.tgl, d.id, d.nama, d.kelas, d.jam]) });
+            } catch(e) { console.error(e); }
         }
 
         window.onload = () => {
-            renderTableSiswa(); 
-            updateClock();
-            updateScannerUI();
-            if(scriptURL) {
-                document.getElementById('url-script').value = scriptURL;
-                updateCloudStatus();
-            }
+            renderTableSiswa(); updateClock(); updateScannerUI();
+            if(scriptURL) { document.getElementById('url-script').value = scriptURL; updateCloudStatus(); }
             html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, onScanSuccess)
-                .catch(() => {
-                    document.getElementById('reader').innerHTML = `
-                        <div class="flex flex-col items-center justify-center p-10 h-full text-slate-400 text-center">
-                            <p class="text-xs font-bold uppercase tracking-widest">Kamera Belum Aktif</p>
-                        </div>
-                    `;
-                });
+                .catch(() => { document.getElementById('reader').innerHTML = `<div class="flex items-center justify-center p-10 h-full text-slate-400 text-xs font-bold uppercase tracking-widest text-center">Akses Kamera Diperlukan untuk Scan QR</div>`; });
         };
     </script>
 </body>
