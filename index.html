@@ -262,7 +262,9 @@
                 <div class="text-left space-y-4">
                     <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">WebApp Deployment URL</label>
                     <input type="text" id="url-script" placeholder="https://script.google.com/..." class="w-full p-5 bg-slate-50 border-none rounded-2xl text-xs font-mono outline-none shadow-inner">
-                    <button onclick="simpanURL()" class="w-full bg-slate-800 text-white py-5 rounded-2xl font-bold text-sm transition-all hover:bg-slate-900">Hubungkan Sekarang</button>
+                    <button id="btn-connect-cloud" onclick="simpanURL()" class="w-full bg-slate-800 text-white py-5 rounded-2xl font-bold text-sm transition-all hover:bg-slate-900 flex items-center justify-center gap-2">
+                        Hubungkan Sekarang
+                    </button>
                 </div>
             </div>
         </section>
@@ -329,6 +331,7 @@
                 updateScannerUI();
             }
             if(id === 'master') renderTableSiswa();
+            if(id === 'settings') updateConnectButton();
         }
 
         function updateClock() {
@@ -336,6 +339,20 @@
             document.getElementById('clock-display').innerText = now.toLocaleTimeString('id-ID', { hour12: false });
         }
         setInterval(updateClock, 1000);
+
+        function updateConnectButton() {
+            const btn = document.getElementById('btn-connect-cloud');
+            if (scriptURL.includes('google.com')) {
+                btn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" /></svg>
+                    Terhubung
+                `;
+                btn.className = "w-full bg-emerald-500 text-white py-5 rounded-2xl font-bold text-sm transition-all hover:bg-emerald-600 flex items-center justify-center gap-2";
+            } else {
+                btn.innerHTML = "Hubungkan Sekarang";
+                btn.className = "w-full bg-slate-800 text-white py-5 rounded-2xl font-bold text-sm transition-all hover:bg-slate-900 flex items-center justify-center gap-2";
+            }
+        }
 
         function updateCloudStatus() {
             const ind = document.getElementById('cloud-indicator');
@@ -551,8 +568,12 @@
             const url = document.getElementById('url-script').value.trim();
             if(url.includes('google.com')) {
                 localStorage.setItem('abs_url', url); scriptURL = url;
-                updateCloudStatus(); alert("Cloud Terhubung!");
-            } else alert("URL tidak valid.");
+                updateCloudStatus(); 
+                updateConnectButton();
+                notify("🌐 Cloud Berhasil Terhubung", "border-emerald-200 bg-emerald-50 text-emerald-700", "Koneksi berhasil");
+            } else {
+                alert("URL Google Apps Script tidak valid.");
+            }
         }
 
         async function kirimKeCloud(d) {
@@ -563,7 +584,11 @@
 
         window.onload = () => {
             renderTableSiswa(); updateClock(); updateScannerUI();
-            if(scriptURL) { document.getElementById('url-script').value = scriptURL; updateCloudStatus(); }
+            if(scriptURL) { 
+                document.getElementById('url-script').value = scriptURL; 
+                updateCloudStatus();
+                updateConnectButton();
+            }
             html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, onScanSuccess)
                 .catch(() => { document.getElementById('reader').innerHTML = `<div class="flex items-center justify-center p-10 h-full text-slate-400 text-xs font-bold uppercase tracking-widest text-center">Akses Kamera Diperlukan untuk Scan QR</div>`; });
         };
