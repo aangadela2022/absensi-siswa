@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { Settings, QrCode, Trash2, Cloud, UserPlus, X, Clock, BarChart3, Bell, Lock, Unlock, ShieldCheck, FileUp, Download } from 'lucide-react';
+import { Settings, QrCode, Trash2, Cloud, UserPlus, X, Clock, BarChart3, Bell, Lock, Unlock, ShieldCheck, FileUp, Download, Users } from 'lucide-react';
 
 /**
  * PENTING: Menggunakan skrip eksternal untuk Html5Qrcode karena keterbatasan import modul langsung
@@ -76,10 +76,8 @@ export default function App() {
     return () => { unsubStudents(); unsubLogs(); };
   }, [user]);
 
-  // Efek Kamera dengan penanganan Timeout yang ditingkatkan
   useEffect(() => {
     let isMounted = true;
-    let cameraStarted = false;
 
     const stopScanner = async () => {
       if (qrScannerRef.current) {
@@ -97,7 +95,6 @@ export default function App() {
 
     const initScanner = async () => {
       if (activeTab === 'scan') {
-        // Jeda lebih lama agar browser melepas hardware kamera dari proses sebelumnya
         await new Promise(resolve => setTimeout(resolve, 800));
         if (!isMounted) return;
 
@@ -106,27 +103,19 @@ export default function App() {
         
         if (element) {
           try {
-            // Bersihkan instansi lama
             await stopScanner();
-            
             const html5QrCode = new window.Html5Qrcode(scannerContainerId);
             qrScannerRef.current = html5QrCode;
             
             await html5QrCode.start(
               { facingMode: "environment" },
-              { 
-                fps: 10, 
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0 
-              },
+              { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
               (decodedText) => handleScanSuccess(decodedText)
             );
-            cameraStarted = true;
           } catch (err) {
             console.error("Scanner error:", err);
-            // Jika AbortError, beritahu user atau coba instruksikan refresh
             if (err.name === 'AbortError' || err.toString().includes('Timeout')) {
-              showNotify("Gagal akses kamera (Timeout). Silakan refresh halaman.", "error");
+              showNotify("Gagal akses kamera. Silakan muat ulang halaman.", "error");
             }
           }
         }
@@ -134,11 +123,7 @@ export default function App() {
     };
 
     initScanner();
-
-    return () => {
-      isMounted = false;
-      stopScanner();
-    };
+    return () => { isMounted = false; stopScanner(); };
   }, [activeTab]);
 
   const handleScanSuccess = async (decodedText) => {
@@ -179,33 +164,24 @@ export default function App() {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async (event) => {
       const text = event.target.result;
       const rows = text.split('\n').filter(r => r.trim()).map(row => row.split(','));
       const batch = writeBatch(db);
       let count = 0;
-
       for (let i = 0; i < rows.length; i++) {
         const [id, nama, kelas] = rows[i];
         if (id && nama && kelas) {
           const studentRef = doc(db, 'artifacts', appId, 'public', 'data', 'students', id.trim());
-          batch.set(studentRef, {
-            studentId: id.trim(),
-            nama: nama.trim(),
-            kelas: kelas.trim()
-          });
+          batch.set(studentRef, { studentId: id.trim(), nama: nama.trim(), kelas: kelas.trim() });
           count++;
         }
       }
-
       try {
         await batch.commit();
         showNotify(`Berhasil impor ${count} siswa`, 'success');
-      } catch (err) {
-        showNotify("Gagal mengimpor data", "error");
-      }
+      } catch (err) { showNotify("Gagal mengimpor data", "error"); }
     };
     reader.readAsText(file);
     e.target.value = null;
@@ -269,9 +245,38 @@ export default function App() {
     }
   };
 
+  // Logika Perhitungan Sebaran per Kelas + Persentase
+  const getAttendancePerClass = () => {
+    const today = new Date().toLocaleDateString('id-ID');
+    const todayLogs = attendanceLogs.filter(log => log.tgl === today);
+    const classCount = {};
+    
+    // Inisialisasi daftar kelas dari database siswa
+    students.forEach(s => {
+      if (!classCount[s.kelas]) classCount[s.kelas] = { total: 0, present: 0 };
+      classCount[s.kelas].total += 1;
+    });
+
+    // Hitung yang hadir
+    todayLogs.forEach(log => {
+      if (classCount[log.kelas]) {
+        classCount[log.kelas].present += 1;
+      }
+    });
+
+    return Object.entries(classCount)
+      .map(([className, stat]) => ({
+        className,
+        ...stat,
+        percentage: stat.total > 0 ? Math.round((stat.present / stat.total) * 100) : 0
+      }))
+      .sort((a, b) => a.className.localeCompare(b.className));
+  };
+
   const totalStudents = students.length;
-  const totalAttendance = attendanceLogs.length;
-  const attendanceRate = totalStudents > 0 ? Math.round((totalAttendance / totalStudents) * 100) : 0;
+  const todayCount = attendanceLogs.filter(l => l.tgl === new Date().toLocaleDateString('id-ID')).length;
+  const attendanceRate = totalStudents > 0 ? Math.round((todayCount / totalStudents) * 100) : 0;
+  const classStats = getAttendancePerClass();
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-10">
@@ -310,59 +315,93 @@ export default function App() {
       <main className="max-w-5xl mx-auto px-4 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white p-6 rounded-[32px] border border-white shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Hadir</p>
-            <h3 className="text-4xl font-black text-slate-800">{totalAttendance} <span className="text-xs font-bold text-indigo-500">Siswa</span></h3>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Hadir Hari Ini</p>
+            <h3 className="text-4xl font-black text-slate-800">{todayCount} <span className="text-xs font-bold text-indigo-500">/ {totalStudents}</span></h3>
           </div>
           <div className="bg-white p-6 rounded-[32px] border border-white shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Persentase</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Persentase Total</p>
             <h3 className="text-4xl font-black text-indigo-600">{attendanceRate}%</h3>
           </div>
-          <div className="md:col-span-2 bg-indigo-600 p-6 rounded-[32px] shadow-lg text-white flex justify-between items-center">
-            <div>
+          <div className="md:col-span-2 bg-indigo-600 p-6 rounded-[32px] shadow-lg text-white flex justify-between items-center relative overflow-hidden">
+            <div className="z-10">
               <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">Status Server</p>
               <span className="text-lg font-black">{currentTime}</span>
             </div>
-            <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full border border-white/10">
+            <div className="z-10 flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full border border-white/10">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-[9px] font-black uppercase tracking-widest">Live Sync</span>
             </div>
+            <div className="absolute -right-4 -bottom-4 opacity-10 rotate-12"><QrCode size={120} /></div>
           </div>
         </div>
 
         {activeTab === 'scan' && (
-          <div className="grid lg:grid-cols-5 gap-6">
-            <div className="lg:col-span-3 space-y-4">
-              <div className="bg-slate-900 rounded-[40px] p-2 relative aspect-video md:aspect-square lg:aspect-video overflow-hidden shadow-2xl border-4 border-white">
-                <div id={scannerContainerId} className="w-full h-full rounded-[32px] overflow-hidden bg-black flex items-center justify-center">
-                  <p className="text-white/20 text-[10px] uppercase font-bold text-center px-4">Mengaktifkan Kamera...</p>
+          <div className="space-y-6">
+            <div className="grid lg:grid-cols-5 gap-6">
+              <div className="lg:col-span-3 space-y-4">
+                <div className="bg-slate-900 rounded-[40px] p-2 relative aspect-video md:aspect-square lg:aspect-video overflow-hidden shadow-2xl border-4 border-white">
+                  <div id={scannerContainerId} className="w-full h-full rounded-[32px] overflow-hidden bg-black flex items-center justify-center text-white/20">
+                    <p className="text-[10px] uppercase font-bold">Kamera Menyiapkan...</p>
+                  </div>
+                  <div className="absolute inset-0 pointer-events-none border-[12px] border-slate-900/40 rounded-[40px]"></div>
+                  <button onClick={() => setIsManualModalOpen(true)} className="absolute bottom-6 right-6 bg-white text-indigo-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2 hover:scale-105 transition-transform active:scale-95">
+                    <UserPlus className="w-4 h-4" /> Manual
+                  </button>
                 </div>
-                <div className="absolute inset-0 pointer-events-none border-[12px] border-slate-900/40 rounded-[40px]"></div>
-                <button onClick={() => setIsManualModalOpen(true)} className="absolute bottom-6 right-6 bg-white text-indigo-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
-                  <UserPlus className="w-4 h-4" /> Manual
-                </button>
+                {feedback.show && (
+                  <div className={`p-4 rounded-2xl border text-center font-bold text-sm shadow-sm animate-bounce ${
+                    feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 
+                    feedback.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-700'
+                  }`}>{feedback.msg}</div>
+                )}
               </div>
-              {feedback.show && (
-                <div className={`p-4 rounded-2xl border text-center font-bold text-sm shadow-sm animate-bounce ${
-                  feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 
-                  feedback.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-700'
-                }`}>{feedback.msg}</div>
-              )}
-            </div>
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-[40px] p-6 h-[500px] border border-white shadow-sm flex flex-col">
-                <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-tight mb-6"><BarChart3 className="w-4 h-4 text-indigo-600" /> Log Real-time</h3>
-                <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
-                  {attendanceLogs.length === 0 ? (
-                    <div className="text-center py-10 opacity-30">Belum ada absensi</div>
-                  ) : (
-                    attendanceLogs.map((log) => (
-                      <div key={log.fbId} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center animate-in slide-in-from-right duration-300">
-                        <div><h4 className="font-black text-slate-800 text-xs">{log.nama}</h4><p className="text-[9px] font-bold text-slate-400 uppercase">{log.kelas}</p></div>
-                        <span className="text-indigo-600 font-black text-[10px] bg-white px-2 py-1 rounded-lg border border-slate-100">{log.jam}</span>
-                      </div>
-                    ))
-                  )}
+              <div className="lg:col-span-2">
+                <div className="bg-white rounded-[40px] p-6 h-full border border-white shadow-sm flex flex-col min-h-[400px]">
+                  <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-tight mb-6"><BarChart3 className="w-4 h-4 text-indigo-600" /> Log Real-time</h3>
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
+                    {attendanceLogs.length === 0 ? (
+                      <div className="text-center py-10 opacity-30 text-xs font-bold uppercase tracking-widest">Belum ada aktivitas</div>
+                    ) : (
+                      attendanceLogs.slice(0, 20).map((log) => (
+                        <div key={log.fbId} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center animate-in slide-in-from-right duration-300">
+                          <div><h4 className="font-black text-slate-800 text-xs">{log.nama}</h4><p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{log.kelas} • {log.tgl}</p></div>
+                          <span className="text-indigo-600 font-black text-[10px] bg-white px-2 py-1 rounded-lg border border-slate-100">{log.jam}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
+              </div>
+            </div>
+
+            {/* SEBARAN PER KELAS */}
+            <div className="bg-white p-8 rounded-[40px] border border-white shadow-sm">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-indigo-50 rounded-xl"><Users className="w-5 h-5 text-indigo-600" /></div>
+                <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Sebaran Kehadiran per Kelas</h3>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                {classStats.length > 0 ? (
+                  classStats.map((stat) => (
+                    <div key={stat.className} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex flex-col items-center text-center">
+                      <div className="w-full flex justify-between items-center mb-2 px-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{stat.className}</span>
+                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">{stat.percentage}%</span>
+                      </div>
+                      <div className="text-xl font-black text-slate-800">
+                        {stat.present}<span className="text-[10px] text-slate-300 mx-1">/</span>{stat.total}
+                      </div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full mt-3 overflow-hidden border border-white">
+                        <div 
+                          className="bg-indigo-500 h-full transition-all duration-1000 shadow-[0_0_8px_rgba(79,70,229,0.3)]" 
+                          style={{ width: `${stat.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="col-span-full py-6 text-center text-xs font-bold text-slate-300 uppercase">Data siswa kosong</div>
+                )}
               </div>
             </div>
           </div>
@@ -384,10 +423,10 @@ export default function App() {
             </div>
             
             <form onSubmit={addStudent} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
-              <input name="studentId" placeholder="ID Siswa" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" required />
-              <input name="nama" placeholder="Nama Lengkap" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" required />
-              <input name="kelas" placeholder="Kelas" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none" required />
-              <button type="submit" className="bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest p-4">Tambah</button>
+              <input name="studentId" placeholder="ID Siswa" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-100" required />
+              <input name="nama" placeholder="Nama Lengkap" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-100" required />
+              <input name="kelas" placeholder="Kelas" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-100" required />
+              <button type="submit" className="bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest p-4 shadow-lg shadow-indigo-100">Tambah</button>
             </form>
 
             <div className="overflow-x-auto">
@@ -414,9 +453,9 @@ export default function App() {
           <div className="max-w-md mx-auto bg-white p-10 rounded-[40px] border border-white shadow-sm text-center">
             <div className="w-16 h-16 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-6"><Cloud className="w-8 h-8 text-indigo-600" /></div>
             <h3 className="text-lg font-black text-slate-800 mb-2 uppercase tracking-tight">Konfigurasi Cloud</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mb-8">Hubungkan ke Google Sheets Apps Script.</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 leading-relaxed">Hubungkan ke Google Sheets Apps Script URL untuk sinkronisasi otomatis.</p>
             <input value={scriptUrl} onChange={(e) => setScriptUrl(e.target.value)} placeholder="URL Apps Script..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-[10px] font-mono mb-4 outline-none" />
-            <button onClick={() => { localStorage.setItem('abs_url', scriptUrl); showNotify("URL Disimpan", "success"); }} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest">Update URL</button>
+            <button onClick={() => { localStorage.setItem('abs_url', scriptUrl); showNotify("URL Disimpan", "success"); }} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-xl">Update URL</button>
           </div>
         )}
       </main>
@@ -424,13 +463,13 @@ export default function App() {
       {/* MODAL: LOGIN ADMIN */}
       {isAdminLoginModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl relative">
-            <button onClick={() => setIsAdminLoginModalOpen(false)} className="absolute top-6 right-6 text-slate-300"><X className="w-5 h-5" /></button>
+          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl relative animate-in zoom-in duration-300">
+            <button onClick={() => setIsAdminLoginModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-500"><X className="w-5 h-5" /></button>
             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4"><Lock className="w-6 h-6 text-indigo-600" /></div>
             <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tight">Login Administrator</h3>
             <form onSubmit={handleAdminLogin}>
-              <input name="password" type="password" placeholder="Password Admin..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-sm font-bold outline-none mb-4" autoFocus />
-              <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest">Login</button>
+              <input name="password" type="password" placeholder="Password Admin..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-sm font-bold outline-none mb-4 focus:ring-2 ring-indigo-100" autoFocus />
+              <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">Konfirmasi</button>
             </form>
           </div>
         </div>
@@ -439,12 +478,13 @@ export default function App() {
       {/* MODAL: MANUAL INPUT */}
       {isManualModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl relative">
-            <button onClick={() => setIsManualModalOpen(false)} className="absolute top-6 right-6 text-slate-300"><X className="w-5 h-5" /></button>
+          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl relative animate-in zoom-in duration-300">
+            <button onClick={() => setIsManualModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-500"><X className="w-5 h-5" /></button>
+            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4"><UserPlus className="w-6 h-6 text-indigo-600" /></div>
             <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tight">Absen Manual</h3>
             <form onSubmit={(e) => { e.preventDefault(); handleScanSuccess(e.target.manualId.value); setIsManualModalOpen(false); }}>
-              <input name="manualId" placeholder="Masukkan ID / NIS..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-sm font-bold outline-none mb-4" autoFocus />
-              <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest">Kirim</button>
+              <input name="manualId" placeholder="Masukkan ID / NIS..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-sm font-bold outline-none mb-4 focus:ring-2 ring-indigo-100" autoFocus />
+              <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">Proses Kehadiran</button>
             </form>
           </div>
         </div>
