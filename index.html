@@ -76,24 +76,39 @@ export default function App() {
     return () => { unsubStudents(); unsubLogs(); };
   }, [user]);
 
-  // Efek Kamera dengan penanganan Timeout dan Cleanup yang lebih baik
+  // Efek Kamera dengan penanganan Timeout yang ditingkatkan
   useEffect(() => {
     let isMounted = true;
+    let cameraStarted = false;
+
+    const stopScanner = async () => {
+      if (qrScannerRef.current) {
+        try {
+          if (qrScannerRef.current.isScanning) {
+            await qrScannerRef.current.stop();
+          }
+          await qrScannerRef.current.clear();
+        } catch (e) {
+          console.warn("Gagal menghentikan scanner secara bersih:", e);
+        }
+        qrScannerRef.current = null;
+      }
+    };
+
     const initScanner = async () => {
       if (activeTab === 'scan') {
-        // Beri sedikit jeda agar DOM ter-render sempurna
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Jeda lebih lama agar browser melepas hardware kamera dari proses sebelumnya
+        await new Promise(resolve => setTimeout(resolve, 800));
         if (!isMounted) return;
 
         await loadScannerScript();
         const element = document.getElementById(scannerContainerId);
+        
         if (element) {
           try {
-            // Pastikan scanner lama sudah mati
-            if (qrScannerRef.current) {
-              await qrScannerRef.current.stop().catch(() => {});
-            }
-
+            // Bersihkan instansi lama
+            await stopScanner();
+            
             const html5QrCode = new window.Html5Qrcode(scannerContainerId);
             qrScannerRef.current = html5QrCode;
             
@@ -106,11 +121,12 @@ export default function App() {
               },
               (decodedText) => handleScanSuccess(decodedText)
             );
+            cameraStarted = true;
           } catch (err) {
-            console.error("Gagal memulai kamera:", err);
-            // Coba lagi sekali jika gagal karena timeout
-            if (err.name === 'AbortError' || err.message?.includes('Timeout')) {
-              console.log("Mencoba ulang inisialisasi kamera...");
+            console.error("Scanner error:", err);
+            // Jika AbortError, beritahu user atau coba instruksikan refresh
+            if (err.name === 'AbortError' || err.toString().includes('Timeout')) {
+              showNotify("Gagal akses kamera (Timeout). Silakan refresh halaman.", "error");
             }
           }
         }
@@ -121,13 +137,7 @@ export default function App() {
 
     return () => {
       isMounted = false;
-      if (qrScannerRef.current) {
-        qrScannerRef.current.stop().catch(() => {
-          // Jika gagal stop, hapus referensi saja
-          console.log("Cleanup scanner...");
-        });
-        qrScannerRef.current = null;
-      }
+      stopScanner();
     };
   }, [activeTab]);
 
