@@ -22,10 +22,6 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // Firebase Mock / Environment Integration
-        // Note: In real environment, use global variables provided
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'absensi-smkn2';
-
         function App() {
             const [role, setRole] = useState(localStorage.getItem('user_role') || 'operator');
             const [activeTab, setActiveTab] = useState('scan');
@@ -52,6 +48,10 @@
             useEffect(() => {
                 localStorage.setItem('db_logs', JSON.stringify(attendanceLogs));
             }, [attendanceLogs]);
+
+            useEffect(() => {
+                localStorage.setItem('abs_url', scriptUrl);
+            }, [scriptUrl]);
 
             useEffect(() => {
                 if (activeTab === 'scan') {
@@ -117,8 +117,24 @@
                 setAttendanceLogs(prev => [newLog, ...prev]);
                 showNotify(`✅ ${student.nama} berhasil hadir`, 'success');
                 
+                // Sinkronisasi ke Google Sheets
                 if (scriptUrl) {
-                    fetch(scriptUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify(newLog) });
+                    // Format data sesuai script.gs: [Tgl, ID, Nama, Kelas, Jam]
+                    const payload = [
+                        newLog.tgl,
+                        newLog.studentId,
+                        newLog.nama,
+                        newLog.kelas,
+                        newLog.jam
+                    ];
+
+                    fetch(scriptUrl, { 
+                        method: 'POST', 
+                        mode: 'no-cors', 
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload) 
+                    }).then(() => console.log("Synced to Cloud"))
+                      .catch(err => console.error("Sync Error:", err));
                 }
             };
 
@@ -129,6 +145,7 @@
 
             const handleAdminLogin = (e) => {
                 e.preventDefault();
+                // Password default: admin123
                 if (e.target.password.value === 'admin123') {
                     setRole('admin');
                     localStorage.setItem('user_role', 'admin');
@@ -138,7 +155,6 @@
                 }
             };
 
-            // Logic Persentase per Kelas
             const getClassStats = () => {
                 const today = new Date().toLocaleDateString('id-ID');
                 const stats = {};
@@ -181,13 +197,13 @@
                             <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
                                 <button onClick={() => setActiveTab('scan')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'scan' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-indigo-400'}`}>Scan</button>
                                 {role === 'admin' && (
-                                    <button onClick={() => setActiveTab('admin')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'admin' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Database</button>
+                                    <button onClick={() => setActiveTab('admin')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'admin' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Pengaturan</button>
                                 )}
                                 <div className="w-px h-4 bg-slate-300 mx-1"></div>
                                 {role === 'operator' ? (
-                                    <button onClick={() => setIsAdminLoginModalOpen(true)} className="p-2 text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
+                                    <button onClick={() => setIsAdminLoginModalOpen(true)} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
                                 ) : (
-                                    <button onClick={() => {setRole('operator'); localStorage.setItem('user_role', 'operator'); setActiveTab('scan')}} className="p-2 text-red-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></button>
+                                    <button onClick={() => {setRole('operator'); localStorage.setItem('user_role', 'operator'); setActiveTab('scan')}} className="p-2 text-red-400 hover:text-red-600 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></button>
                                 )}
                             </div>
                         </div>
@@ -242,7 +258,7 @@
                                             </h3>
                                             <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
                                                 {attendanceLogs.length === 0 ? (
-                                                    <div className="h-full flex items-center justify-center opacity-20 text-[10px] font-bold uppercase tracking-widest">Belum ada absen</div>
+                                                    <div className="h-full flex items-center justify-center opacity-20 text-[10px] font-bold uppercase tracking-widest text-center">Belum ada absen<br/>hari ini</div>
                                                 ) : (
                                                     attendanceLogs.slice(0,10).map((log, i) => (
                                                         <div key={i} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center animate-in slide-in-from-right duration-300">
@@ -266,7 +282,9 @@
                                         <h3 className="text-sm font-extrabold uppercase tracking-tight">Sebaran Kehadiran per Kelas</h3>
                                     </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                                        {classStats.map(stat => (
+                                        {classStats.length === 0 ? (
+                                            <div className="col-span-full py-10 text-center text-slate-300 text-[10px] font-bold uppercase tracking-widest">Database Siswa Kosong</div>
+                                        ) : classStats.map(stat => (
                                             <div key={stat.name} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex flex-col items-center">
                                                 <div className="w-full flex justify-between items-center mb-1">
                                                     <span className="text-[9px] font-extrabold text-slate-400 uppercase">{stat.name}</span>
@@ -286,79 +304,119 @@
                         )}
 
                         {role === 'admin' && activeTab === 'admin' && (
-                            <div className="bg-white p-8 rounded-[3rem] border border-white shadow-sm animate-in fade-in duration-500">
-                                <div className="flex justify-between items-center mb-8">
-                                    <h3 className="text-lg font-extrabold text-slate-800 uppercase tracking-tight">Database Siswa</h3>
-                                    <div className="flex gap-2">
-                                        <input type="file" id="csvInput" className="hidden" accept=".csv" onChange={(e) => {
-                                            const file = e.target.files[0];
-                                            const reader = new FileReader();
-                                            reader.onload = (event) => {
-                                                const rows = event.target.result.split('\n').filter(r => r.trim());
-                                                const newData = rows.map(r => {
-                                                    const [id, nama, kelas] = r.split(',');
-                                                    return { studentId: id?.trim(), nama: nama?.trim(), kelas: kelas?.trim() };
-                                                }).filter(s => s.studentId && s.nama);
-                                                setStudents(newData);
-                                                showNotify(`Berhasil impor ${newData.length} siswa`, 'success');
-                                            };
-                                            reader.readAsText(file);
-                                        }} />
-                                        <button onClick={() => document.getElementById('csvInput').click()} className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-extrabold uppercase tracking-widest">Impor CSV</button>
-                                        <button onClick={() => setStudents([])} className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-[10px] font-extrabold uppercase tracking-widest">Reset</button>
+                            <div className="space-y-6 animate-in fade-in duration-500">
+                                {/* Google Sheets Integration */}
+                                <div className="bg-white p-8 rounded-[3rem] border border-white shadow-sm">
+                                    <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2">
+                                        <svg className="text-emerald-500" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 2v20M2 12h20"/></svg>
+                                        Koneksi Google Sheets
+                                    </h3>
+                                    <div className="flex flex-col md:flex-row gap-3">
+                                        <input 
+                                            value={scriptUrl} 
+                                            onChange={(e) => setScriptUrl(e.target.value)}
+                                            placeholder="Tempel URL Web App Apps Script di sini..." 
+                                            className="flex-1 p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none border border-transparent focus:border-indigo-200 transition-all" 
+                                        />
+                                        <button onClick={() => showNotify("URL Tersimpan", "success")} className="bg-indigo-600 text-white px-8 rounded-2xl font-extrabold text-[10px] uppercase shadow-lg shadow-indigo-100">Simpan URL</button>
                                     </div>
+                                    <p className="mt-3 text-[10px] text-slate-400 font-medium italic">Data absensi akan otomatis terkirim ke Spreadsheet setiap kali scan berhasil.</p>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
-                                    <input id="newId" placeholder="ID Siswa" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none" />
-                                    <input id="newNama" placeholder="Nama Lengkap" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none" />
-                                    <input id="newKelas" placeholder="Kelas" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none" />
-                                    <button onClick={() => {
-                                        const id = document.getElementById('newId').value;
-                                        const nm = document.getElementById('newNama').value;
-                                        const kl = document.getElementById('newKelas').value;
-                                        if(id && nm && kl) {
-                                            setStudents([...students, {studentId: id, nama: nm, kelas: kl}]);
-                                            document.getElementById('newId').value = '';
-                                            document.getElementById('newNama').value = '';
-                                            document.getElementById('newKelas').value = '';
-                                        }
-                                    }} className="bg-indigo-600 text-white rounded-2xl font-extrabold text-[10px] uppercase">Tambah</button>
-                                </div>
-                                <div className="max-h-96 overflow-y-auto rounded-3xl border border-slate-100">
-                                    <table className="w-full text-left text-[11px]">
-                                        <thead className="sticky top-0 bg-white shadow-sm">
-                                            <tr>
-                                                <th className="p-4 font-extrabold text-slate-400 uppercase">ID</th>
-                                                <th className="p-4 font-extrabold text-slate-400 uppercase">Nama</th>
-                                                <th className="p-4 font-extrabold text-slate-400 uppercase">Kelas</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-50">
-                                            {students.map((s, i) => (
-                                                <tr key={i} className="hover:bg-slate-50">
-                                                    <td className="p-4 font-bold text-indigo-600">{s.studentId}</td>
-                                                    <td className="p-4 font-extrabold text-slate-700 uppercase">{s.nama}</td>
-                                                    <td className="p-4 font-bold text-slate-400">{s.kelas}</td>
+
+                                {/* Database Siswa */}
+                                <div className="bg-white p-8 rounded-[3rem] border border-white shadow-sm">
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                                        <div>
+                                            <h3 className="text-lg font-extrabold text-slate-800 uppercase tracking-tight">Database Siswa</h3>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Format CSV: ID,Nama,Kelas</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <input type="file" id="csvInput" className="hidden" accept=".csv" onChange={(e) => {
+                                                const file = e.target.files[0];
+                                                const reader = new FileReader();
+                                                reader.onload = (event) => {
+                                                    const rows = event.target.result.split('\n').filter(r => r.trim());
+                                                    const newData = rows.map(r => {
+                                                        const [id, nama, kelas] = r.split(',');
+                                                        return { studentId: id?.trim(), nama: nama?.trim(), kelas: kelas?.trim() };
+                                                    }).filter(s => s.studentId && s.nama);
+                                                    setStudents(newData);
+                                                    showNotify(`Berhasil impor ${newData.length} siswa`, 'success');
+                                                };
+                                                reader.readAsText(file);
+                                            }} />
+                                            <button onClick={() => document.getElementById('csvInput').click()} className="px-5 py-3 bg-emerald-500 text-white rounded-2xl text-[10px] font-extrabold uppercase tracking-widest hover:bg-emerald-600 transition-colors">Impor CSV</button>
+                                            <button onClick={() => { if(confirm("Hapus semua data siswa?")) setStudents([]) }} className="px-5 py-3 bg-red-50 text-red-500 rounded-2xl text-[10px] font-extrabold uppercase tracking-widest hover:bg-red-100 transition-colors">Reset</button>
+                                        </div>
+                                    </div>
+
+                                    {/* Manual Student Add */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
+                                        <input id="newId" placeholder="ID Siswa" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none border border-transparent focus:border-indigo-100" />
+                                        <input id="newNama" placeholder="Nama Lengkap" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none border border-transparent focus:border-indigo-100" />
+                                        <input id="newKelas" placeholder="Kelas" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none border border-transparent focus:border-indigo-100" />
+                                        <button onClick={() => {
+                                            const id = document.getElementById('newId').value;
+                                            const nm = document.getElementById('newNama').value;
+                                            const kl = document.getElementById('newKelas').value;
+                                            if(id && nm && kl) {
+                                                setStudents([...students, {studentId: id, nama: nm, kelas: kl}]);
+                                                document.getElementById('newId').value = '';
+                                                document.getElementById('newNama').value = '';
+                                                document.getElementById('newKelas').value = '';
+                                                showNotify("Siswa ditambahkan", "success");
+                                            } else {
+                                                showNotify("Lengkapi semua field", "error");
+                                            }
+                                        }} className="bg-slate-900 text-white rounded-2xl font-extrabold text-[10px] uppercase hover:bg-slate-800 transition-colors">Tambah Siswa</button>
+                                    </div>
+
+                                    <div className="max-h-96 overflow-y-auto rounded-3xl border border-slate-100 scrollbar-hide">
+                                        <table className="w-full text-left text-[11px]">
+                                            <thead className="sticky top-0 bg-white shadow-sm">
+                                                <tr>
+                                                    <th className="p-5 font-extrabold text-slate-400 uppercase tracking-widest border-b border-slate-50">ID Barcode</th>
+                                                    <th className="p-5 font-extrabold text-slate-400 uppercase tracking-widest border-b border-slate-50">Nama Siswa</th>
+                                                    <th className="p-5 font-extrabold text-slate-400 uppercase tracking-widest border-b border-slate-50">Kelas</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-50">
+                                                {students.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="3" className="p-10 text-center text-slate-300 font-bold uppercase tracking-widest">Tidak ada data siswa</td>
+                                                    </tr>
+                                                ) : students.map((s, i) => (
+                                                    <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                                                        <td className="p-5 font-bold text-indigo-600 tracking-wider">{s.studentId}</td>
+                                                        <td className="p-5 font-extrabold text-slate-700 uppercase">{s.nama}</td>
+                                                        <td className="p-5 font-bold text-slate-400">{s.kelas}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* Modal Manual */}
+                    {/* Modal Manual Input */}
                     {isManualModalOpen && (
                         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-sm p-8 rounded-[3rem] shadow-2xl relative">
-                                <button onClick={() => setIsManualModalOpen(false)} className="absolute top-6 right-6 text-slate-300">✕</button>
-                                <h3 className="text-lg font-extrabold text-slate-800 mb-6 uppercase">Input Manual</h3>
-                                <input id="manualInput" placeholder="Ketik ID Siswa..." className="w-full p-5 bg-slate-50 rounded-3xl text-sm font-bold outline-none mb-4" autoFocus />
+                            <div className="bg-white w-full max-w-sm p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-200">
+                                <button onClick={() => setIsManualModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-500 transition-colors font-bold">✕</button>
+                                <h3 className="text-lg font-extrabold text-slate-800 mb-6 uppercase tracking-tight">Input Manual ID</h3>
+                                <input 
+                                    id="manualInput" 
+                                    placeholder="Masukkan ID Barcode..." 
+                                    className="w-full p-6 bg-slate-50 rounded-3xl text-sm font-bold outline-none mb-4 border border-transparent focus:border-indigo-100 transition-all" 
+                                    autoFocus 
+                                    onKeyDown={(e) => e.key === 'Enter' && (handleScanSuccess(e.target.value), setIsManualModalOpen(false))}
+                                />
                                 <button onClick={() => {
                                     handleScanSuccess(document.getElementById('manualInput').value);
                                     setIsManualModalOpen(false);
-                                }} className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-extrabold text-[10px] uppercase shadow-lg shadow-indigo-200">Proses</button>
+                                }} className="w-full bg-indigo-600 text-white py-6 rounded-3xl font-extrabold text-[10px] uppercase shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-colors">Proses Absensi</button>
                             </div>
                         </div>
                     )}
@@ -366,12 +424,18 @@
                     {/* Modal Login Admin */}
                     {isAdminLoginModalOpen && (
                         <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white w-full max-w-sm p-8 rounded-[3rem] shadow-2xl relative">
-                                <button onClick={() => setIsAdminLoginModalOpen(false)} className="absolute top-6 right-6 text-slate-300">✕</button>
-                                <h3 className="text-lg font-extrabold text-slate-800 mb-6 uppercase tracking-tight">Admin Login</h3>
+                            <div className="bg-white w-full max-w-sm p-10 rounded-[3rem] shadow-2xl relative animate-in zoom-in duration-200">
+                                <button onClick={() => setIsAdminLoginModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-500 transition-colors font-bold">✕</button>
+                                <h3 className="text-lg font-extrabold text-slate-800 mb-6 uppercase tracking-tight">Login Administrator</h3>
                                 <form onSubmit={handleAdminLogin}>
-                                    <input name="password" type="password" placeholder="Password: admin123" className="w-full p-5 bg-slate-50 rounded-3xl text-sm font-bold outline-none mb-4" autoFocus />
-                                    <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-3xl font-extrabold text-[10px] uppercase shadow-xl">Masuk</button>
+                                    <input 
+                                        name="password" 
+                                        type="password" 
+                                        placeholder="Masukkan Password Admin" 
+                                        className="w-full p-6 bg-slate-50 rounded-3xl text-sm font-bold outline-none mb-4 border border-transparent focus:border-slate-200 transition-all" 
+                                        autoFocus 
+                                    />
+                                    <button type="submit" className="w-full bg-slate-900 text-white py-6 rounded-3xl font-extrabold text-[10px] uppercase shadow-xl hover:bg-slate-800 transition-colors">Masuk Panel Admin</button>
                                 </form>
                             </div>
                         </div>
