@@ -1,494 +1,387 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, collection, query, addDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { Settings, QrCode, Trash2, Cloud, UserPlus, X, Clock, BarChart3, Bell, Lock, Unlock, ShieldCheck, FileUp, Download, Users } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>e-Absensi Sync - SMKN 2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .glass { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.3); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
 
-/**
- * PENTING: Menggunakan skrip eksternal untuk Html5Qrcode karena keterbatasan import modul langsung
- */
-const loadScannerScript = () => {
-  return new Promise((resolve) => {
-    if (window.Html5Qrcode) {
-      resolve(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = "https://unpkg.com/html5-qrcode";
-    script.onload = () => resolve(true);
-    document.body.appendChild(script);
-  });
-};
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'absensi-smkn2';
+        // Firebase Mock / Environment Integration
+        // Note: In real environment, use global variables provided
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'absensi-smkn2';
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [role, setRole] = useState(localStorage.getItem('user_role') || 'operator');
-  const [activeTab, setActiveTab] = useState('scan');
-  const [students, setStudents] = useState([]);
-  const [attendanceLogs, setAttendanceLogs] = useState([]);
-  const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('abs_url') || "");
-  const [feedback, setFeedback] = useState({ msg: '', type: '', show: false });
-  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
-  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('id-ID'));
-  
-  const qrScannerRef = useRef(null);
-  const scannerContainerId = "reader";
-  const fileInputRef = useRef(null);
+        function App() {
+            const [role, setRole] = useState(localStorage.getItem('user_role') || 'operator');
+            const [activeTab, setActiveTab] = useState('scan');
+            const [students, setStudents] = useState(JSON.parse(localStorage.getItem('db_students')) || []);
+            const [attendanceLogs, setAttendanceLogs] = useState(JSON.parse(localStorage.getItem('db_logs')) || []);
+            const [scriptUrl, setScriptUrl] = useState(localStorage.getItem('abs_url') || "");
+            const [feedback, setFeedback] = useState({ msg: '', type: '', show: false });
+            const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+            const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+            const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('id-ID'));
 
-  useEffect(() => {
-    const initAuth = async () => {
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
+            const qrScannerRef = useRef(null);
+            const scannerContainerId = "reader";
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date().toLocaleTimeString('id-ID')), 1000);
-    return () => clearInterval(timer);
-  }, []);
+            useEffect(() => {
+                const timer = setInterval(() => setCurrentTime(new Date().toLocaleTimeString('id-ID')), 1000);
+                return () => clearInterval(timer);
+            }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    const qStudents = collection(db, 'artifacts', appId, 'public', 'data', 'students');
-    const unsubStudents = onSnapshot(qStudents, (snapshot) => {
-      setStudents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (err) => console.error("Sinkronisasi siswa gagal:", err));
+            useEffect(() => {
+                localStorage.setItem('db_students', JSON.stringify(students));
+            }, [students]);
 
-    const qLogs = collection(db, 'artifacts', appId, 'public', 'data', 'attendance');
-    const unsubLogs = onSnapshot(qLogs, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ fbId: doc.id, ...doc.data() }));
-      setAttendanceLogs(data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
-    }, (err) => console.error("Sinkronisasi log gagal:", err));
+            useEffect(() => {
+                localStorage.setItem('db_logs', JSON.stringify(attendanceLogs));
+            }, [attendanceLogs]);
 
-    return () => { unsubStudents(); unsubLogs(); };
-  }, [user]);
+            useEffect(() => {
+                if (activeTab === 'scan') {
+                    startScanner();
+                } else {
+                    stopScanner();
+                }
+                return () => stopScanner();
+            }, [activeTab]);
 
-  useEffect(() => {
-    let isMounted = true;
+            const startScanner = async () => {
+                setTimeout(async () => {
+                    const element = document.getElementById(scannerContainerId);
+                    if (element && !qrScannerRef.current) {
+                        const html5QrCode = new Html5Qrcode(scannerContainerId);
+                        qrScannerRef.current = html5QrCode;
+                        try {
+                            await html5QrCode.start(
+                                { facingMode: "environment" },
+                                { fps: 10, qrbox: 250 },
+                                (decodedText) => handleScanSuccess(decodedText)
+                            );
+                        } catch (err) {
+                            console.error("Scanner error:", err);
+                        }
+                    }
+                }, 500);
+            };
 
-    const stopScanner = async () => {
-      if (qrScannerRef.current) {
-        try {
-          if (qrScannerRef.current.isScanning) {
-            await qrScannerRef.current.stop();
-          }
-          await qrScannerRef.current.clear();
-        } catch (e) {
-          console.warn("Gagal menghentikan scanner secara bersih:", e);
-        }
-        qrScannerRef.current = null;
-      }
-    };
+            const stopScanner = async () => {
+                if (qrScannerRef.current) {
+                    try {
+                        await qrScannerRef.current.stop();
+                        qrScannerRef.current = null;
+                    } catch (e) {}
+                }
+            };
 
-    const initScanner = async () => {
-      if (activeTab === 'scan') {
-        await new Promise(resolve => setTimeout(resolve, 800));
-        if (!isMounted) return;
+            const handleScanSuccess = (decodedText) => {
+                const student = students.find(s => s.studentId === decodedText.trim());
+                if (!student) {
+                    showNotify(`ID ${decodedText} tidak terdaftar`, 'error');
+                    return;
+                }
 
-        await loadScannerScript();
-        const element = document.getElementById(scannerContainerId);
-        
-        if (element) {
-          try {
-            await stopScanner();
-            const html5QrCode = new window.Html5Qrcode(scannerContainerId);
-            qrScannerRef.current = html5QrCode;
-            
-            await html5QrCode.start(
-              { facingMode: "environment" },
-              { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-              (decodedText) => handleScanSuccess(decodedText)
-            );
-          } catch (err) {
-            console.error("Scanner error:", err);
-            if (err.name === 'AbortError' || err.toString().includes('Timeout')) {
-              showNotify("Gagal akses kamera. Silakan muat ulang halaman.", "error");
-            }
-          }
-        }
-      }
-    };
+                const today = new Date().toLocaleDateString('id-ID');
+                const isAlreadyPresent = attendanceLogs.some(l => l.studentId === student.studentId && l.tgl === today);
 
-    initScanner();
-    return () => { isMounted = false; stopScanner(); };
-  }, [activeTab]);
+                if (isAlreadyPresent) {
+                    showNotify(`${student.nama} sudah absen hari ini`, 'warning');
+                    return;
+                }
 
-  const handleScanSuccess = async (decodedText) => {
-    const rawId = decodedText.trim();
-    const student = students.find(s => s.studentId.toLowerCase() === rawId.toLowerCase());
-    if (!student) {
-      showNotify(`ID ${rawId} tidak terdaftar`, 'error');
-      playVoice(`ID tidak dikenal`);
-      return;
-    }
-    const today = new Date().toLocaleDateString('id-ID');
-    const isDuplicate = attendanceLogs.find(l => l.studentId === student.studentId && l.tgl === today);
-    if (isDuplicate) {
-      showNotify(`⚠️ ${student.nama} sudah absen`, 'warning');
-      playVoice(`${student.nama} sudah absen`);
-      return;
-    }
-    const now = new Date();
-    const newLog = {
-      studentId: student.studentId,
-      nama: student.nama,
-      kelas: student.kelas,
-      jam: now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-      tgl: today,
-      timestamp: now.toISOString()
-    };
-    try {
-      if (!user) return;
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'attendance'), newLog);
-      showNotify(`✅ ${student.nama} hadir`, 'success');
-      playVoice(`${student.nama} hadir`);
-      if (scriptUrl) {
-        fetch(scriptUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify([newLog.tgl, newLog.studentId, newLog.nama, newLog.kelas, newLog.jam]) });
-      }
-    } catch (err) { showNotify('Gagal sinkron cloud', 'error'); }
-  };
+                const newLog = {
+                    studentId: student.studentId,
+                    nama: student.nama,
+                    kelas: student.kelas,
+                    jam: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+                    tgl: today,
+                    timestamp: new Date().getTime()
+                };
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const text = event.target.result;
-      const rows = text.split('\n').filter(r => r.trim()).map(row => row.split(','));
-      const batch = writeBatch(db);
-      let count = 0;
-      for (let i = 0; i < rows.length; i++) {
-        const [id, nama, kelas] = rows[i];
-        if (id && nama && kelas) {
-          const studentRef = doc(db, 'artifacts', appId, 'public', 'data', 'students', id.trim());
-          batch.set(studentRef, { studentId: id.trim(), nama: nama.trim(), kelas: kelas.trim() });
-          count++;
-        }
-      }
-      try {
-        await batch.commit();
-        showNotify(`Berhasil impor ${count} siswa`, 'success');
-      } catch (err) { showNotify("Gagal mengimpor data", "error"); }
-    };
-    reader.readAsText(file);
-    e.target.value = null;
-  };
+                setAttendanceLogs(prev => [newLog, ...prev]);
+                showNotify(`✅ ${student.nama} berhasil hadir`, 'success');
+                
+                if (scriptUrl) {
+                    fetch(scriptUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify(newLog) });
+                }
+            };
 
-  const downloadSampleCSV = () => {
-    const content = "ID_SISWA,NAMA_SISWA,KELAS\n12345,Budi Santoso,XI-RPL-1\n67890,Siti Aminah,X-TKJ-2";
-    const blob = new Blob([content], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "format_impor_siswa.csv";
-    a.click();
-  };
+            const showNotify = (msg, type) => {
+                setFeedback({ msg, type, show: true });
+                setTimeout(() => setFeedback(prev => ({ ...prev, show: false })), 3000);
+            };
 
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    if (e.target.password.value === 'admin123') {
-      setRole('admin');
-      localStorage.setItem('user_role', 'admin');
-      setIsAdminLoginModalOpen(false);
-      showNotify("Login Admin Berhasil", "success");
-    } else {
-      showNotify("Password Salah!", "error");
-    }
-  };
+            const handleAdminLogin = (e) => {
+                e.preventDefault();
+                if (e.target.password.value === 'admin123') {
+                    setRole('admin');
+                    localStorage.setItem('user_role', 'admin');
+                    setIsAdminLoginModalOpen(false);
+                } else {
+                    showNotify("Password salah!", "error");
+                }
+            };
 
-  const handleLogout = () => {
-    setRole('operator');
-    localStorage.setItem('user_role', 'operator');
-    setActiveTab('scan');
-  };
+            // Logic Persentase per Kelas
+            const getClassStats = () => {
+                const today = new Date().toLocaleDateString('id-ID');
+                const stats = {};
+                
+                students.forEach(s => {
+                    if (!stats[s.kelas]) stats[s.kelas] = { total: 0, present: 0 };
+                    stats[s.kelas].total++;
+                });
 
-  const showNotify = (msg, type) => {
-    setFeedback({ msg, type, show: true });
-    setTimeout(() => setFeedback(prev => ({ ...prev, show: false })), 3000);
-  };
+                attendanceLogs.filter(l => l.tgl === today).forEach(l => {
+                    if (stats[l.kelas]) stats[l.kelas].present++;
+                });
 
-  const playVoice = (text) => {
-    if ('speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'id-ID';
-      window.speechSynthesis.speak(u);
-    }
-  };
+                return Object.entries(stats).map(([name, data]) => ({
+                    name,
+                    ...data,
+                    percent: data.total > 0 ? Math.round((data.present / data.total) * 100) : 0
+                })).sort((a, b) => a.name.localeCompare(b.name));
+            };
 
-  const addStudent = async (e) => {
-    e.preventDefault();
-    if (role !== 'admin') return;
-    const studentId = e.target.studentId.value.trim();
-    const nama = e.target.nama.value.trim();
-    const kelas = e.target.kelas.value.trim();
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', studentId), { studentId, nama, kelas });
-    e.target.reset();
-  };
+            const todayCount = attendanceLogs.filter(l => l.tgl === new Date().toLocaleDateString('id-ID')).length;
+            const totalSiswa = students.length;
+            const classStats = getClassStats();
 
-  const deleteStudent = async (id) => {
-    if (role !== 'admin') return;
-    if (confirm("Hapus siswa ini?")) {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'students', id));
-    }
-  };
-
-  // Logika Perhitungan Sebaran per Kelas + Persentase
-  const getAttendancePerClass = () => {
-    const today = new Date().toLocaleDateString('id-ID');
-    const todayLogs = attendanceLogs.filter(log => log.tgl === today);
-    const classCount = {};
-    
-    // Inisialisasi daftar kelas dari database siswa
-    students.forEach(s => {
-      if (!classCount[s.kelas]) classCount[s.kelas] = { total: 0, present: 0 };
-      classCount[s.kelas].total += 1;
-    });
-
-    // Hitung yang hadir
-    todayLogs.forEach(log => {
-      if (classCount[log.kelas]) {
-        classCount[log.kelas].present += 1;
-      }
-    });
-
-    return Object.entries(classCount)
-      .map(([className, stat]) => ({
-        className,
-        ...stat,
-        percentage: stat.total > 0 ? Math.round((stat.present / stat.total) * 100) : 0
-      }))
-      .sort((a, b) => a.className.localeCompare(b.className));
-  };
-
-  const totalStudents = students.length;
-  const todayCount = attendanceLogs.filter(l => l.tgl === new Date().toLocaleDateString('id-ID')).length;
-  const attendanceRate = totalStudents > 0 ? Math.round((todayCount / totalStudents) * 100) : 0;
-  const classStats = getAttendancePerClass();
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-10">
-      <nav className="sticky top-0 z-50 p-4">
-        <div className="max-w-5xl mx-auto bg-white/90 backdrop-blur-md rounded-3xl border border-white shadow-lg px-6 py-3 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
-              <QrCode className="text-white w-5 h-5" />
-            </div>
-            <div className="hidden sm:block">
-              <h1 className="text-sm font-black tracking-tight uppercase">e-Absensi <span className="text-indigo-600">Sync</span></h1>
-              <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                 {role === 'admin' ? <ShieldCheck className="w-3 h-3 text-emerald-500" /> : <Lock className="w-3 h-3 text-amber-500" />} {role}
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex bg-slate-100 p-1 rounded-2xl items-center">
-            <button onClick={() => setActiveTab('scan')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'scan' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Scan</button>
-            {role === 'admin' && (
-              <button onClick={() => setActiveTab('master')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'master' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Siswa</button>
-            )}
-            <div className="w-px h-4 bg-slate-200 mx-2" />
-            {role === 'operator' ? (
-              <button onClick={() => setIsAdminLoginModalOpen(true)} className="p-2 text-slate-400 hover:text-indigo-600"><Lock className="w-4 h-4" /></button>
-            ) : (
-              <>
-                <button onClick={() => setActiveTab('settings')} className={`p-2 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}><Settings className="w-4 h-4" /></button>
-                <button onClick={handleLogout} className="p-2 text-red-400 hover:text-red-600 ml-1"><Unlock className="w-4 h-4" /></button>
-              </>
-            )}
-          </div>
-        </div>
-      </nav>
-
-      <main className="max-w-5xl mx-auto px-4 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-6 rounded-[32px] border border-white shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Hadir Hari Ini</p>
-            <h3 className="text-4xl font-black text-slate-800">{todayCount} <span className="text-xs font-bold text-indigo-500">/ {totalStudents}</span></h3>
-          </div>
-          <div className="bg-white p-6 rounded-[32px] border border-white shadow-sm">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Persentase Total</p>
-            <h3 className="text-4xl font-black text-indigo-600">{attendanceRate}%</h3>
-          </div>
-          <div className="md:col-span-2 bg-indigo-600 p-6 rounded-[32px] shadow-lg text-white flex justify-between items-center relative overflow-hidden">
-            <div className="z-10">
-              <p className="text-[10px] font-black opacity-60 uppercase tracking-widest mb-1">Status Server</p>
-              <span className="text-lg font-black">{currentTime}</span>
-            </div>
-            <div className="z-10 flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full border border-white/10">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[9px] font-black uppercase tracking-widest">Live Sync</span>
-            </div>
-            <div className="absolute -right-4 -bottom-4 opacity-10 rotate-12"><QrCode size={120} /></div>
-          </div>
-        </div>
-
-        {activeTab === 'scan' && (
-          <div className="space-y-6">
-            <div className="grid lg:grid-cols-5 gap-6">
-              <div className="lg:col-span-3 space-y-4">
-                <div className="bg-slate-900 rounded-[40px] p-2 relative aspect-video md:aspect-square lg:aspect-video overflow-hidden shadow-2xl border-4 border-white">
-                  <div id={scannerContainerId} className="w-full h-full rounded-[32px] overflow-hidden bg-black flex items-center justify-center text-white/20">
-                    <p className="text-[10px] uppercase font-bold">Kamera Menyiapkan...</p>
-                  </div>
-                  <div className="absolute inset-0 pointer-events-none border-[12px] border-slate-900/40 rounded-[40px]"></div>
-                  <button onClick={() => setIsManualModalOpen(true)} className="absolute bottom-6 right-6 bg-white text-indigo-600 px-5 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2 hover:scale-105 transition-transform active:scale-95">
-                    <UserPlus className="w-4 h-4" /> Manual
-                  </button>
-                </div>
-                {feedback.show && (
-                  <div className={`p-4 rounded-2xl border text-center font-bold text-sm shadow-sm animate-bounce ${
-                    feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 
-                    feedback.type === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-red-50 border-red-200 text-red-700'
-                  }`}>{feedback.msg}</div>
-                )}
-              </div>
-              <div className="lg:col-span-2">
-                <div className="bg-white rounded-[40px] p-6 h-full border border-white shadow-sm flex flex-col min-h-[400px]">
-                  <h3 className="font-black text-slate-800 flex items-center gap-2 text-sm uppercase tracking-tight mb-6"><BarChart3 className="w-4 h-4 text-indigo-600" /> Log Real-time</h3>
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
-                    {attendanceLogs.length === 0 ? (
-                      <div className="text-center py-10 opacity-30 text-xs font-bold uppercase tracking-widest">Belum ada aktivitas</div>
-                    ) : (
-                      attendanceLogs.slice(0, 20).map((log) => (
-                        <div key={log.fbId} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center animate-in slide-in-from-right duration-300">
-                          <div><h4 className="font-black text-slate-800 text-xs">{log.nama}</h4><p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{log.kelas} • {log.tgl}</p></div>
-                          <span className="text-indigo-600 font-black text-[10px] bg-white px-2 py-1 rounded-lg border border-slate-100">{log.jam}</span>
+            return (
+                <div className="min-h-screen pb-10">
+                    {/* Navigation */}
+                    <nav className="p-4 sticky top-0 z-50">
+                        <div className="max-w-5xl mx-auto glass rounded-[2rem] px-6 py-3 flex justify-between items-center shadow-xl shadow-slate-200/50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/><path d="M21 21v.01"/><path d="M12 7v3a2 2 0 0 1-2 2H7"/><path d="M3 12h.01"/><path d="M12 3h.01"/><path d="M12 16v.01"/><path d="M16 12h1"/><path d="M21 12v.01"/><path d="M12 21v.01"/></svg>
+                                </div>
+                                <div>
+                                    <h1 className="text-sm font-extrabold uppercase tracking-tight">e-Absensi <span className="text-indigo-600">Sync</span></h1>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{role}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl">
+                                <button onClick={() => setActiveTab('scan')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'scan' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-indigo-400'}`}>Scan</button>
+                                {role === 'admin' && (
+                                    <button onClick={() => setActiveTab('admin')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeTab === 'admin' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500'}`}>Database</button>
+                                )}
+                                <div className="w-px h-4 bg-slate-300 mx-1"></div>
+                                {role === 'operator' ? (
+                                    <button onClick={() => setIsAdminLoginModalOpen(true)} className="p-2 text-slate-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></button>
+                                ) : (
+                                    <button onClick={() => {setRole('operator'); localStorage.setItem('user_role', 'operator'); setActiveTab('scan')}} className="p-2 text-red-400"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></button>
+                                )}
+                            </div>
                         </div>
-                      ))
+                    </nav>
+
+                    <main className="max-w-5xl mx-auto px-4 mt-4 space-y-6">
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white">
+                                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Hadir Hari Ini</p>
+                                <h3 className="text-4xl font-extrabold text-slate-800">{todayCount} <span className="text-sm font-bold text-indigo-400">/ {totalSiswa}</span></h3>
+                            </div>
+                            <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-white">
+                                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-1">Persentase Total</p>
+                                <h3 className="text-4xl font-extrabold text-indigo-600">{totalSiswa > 0 ? Math.round((todayCount/totalSiswa)*100) : 0}%</h3>
+                            </div>
+                            <div className="bg-indigo-600 p-6 rounded-[2.5rem] shadow-lg text-white flex justify-between items-center relative overflow-hidden">
+                                <div className="z-10">
+                                    <p className="text-[10px] font-extrabold opacity-60 uppercase tracking-widest mb-1">Server Time</p>
+                                    <h3 className="text-2xl font-extrabold">{currentTime}</h3>
+                                </div>
+                                <div className="z-10 bg-white/20 p-2 rounded-xl border border-white/20">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                                </div>
+                                <div className="absolute -right-4 -bottom-4 opacity-10 rotate-12 scale-150">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect width="5" height="5" x="3" y="3" rx="1"/><rect width="5" height="5" x="16" y="3" rx="1"/><rect width="5" height="5" x="3" y="16" rx="1"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/></svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        {activeTab === 'scan' && (
+                            <div className="space-y-6">
+                                <div className="grid lg:grid-cols-5 gap-6">
+                                    <div className="lg:col-span-3">
+                                        <div className="bg-slate-900 rounded-[3rem] p-3 aspect-video relative overflow-hidden border-4 border-white shadow-2xl">
+                                            <div id={scannerContainerId} className="w-full h-full rounded-[2.5rem] overflow-hidden bg-black"></div>
+                                            <button onClick={() => setIsManualModalOpen(true)} className="absolute bottom-6 right-6 bg-white text-indigo-600 px-6 py-3 rounded-2xl font-extrabold text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
+                                                Manual Input
+                                            </button>
+                                        </div>
+                                        {feedback.show && (
+                                            <div className={`mt-4 p-4 rounded-2xl text-center font-bold text-sm border animate-bounce ${feedback.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                                                {feedback.msg}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="lg:col-span-2">
+                                        <div className="bg-white rounded-[3rem] p-6 h-full border border-white shadow-sm flex flex-col min-h-[300px]">
+                                            <h3 className="font-extrabold text-slate-800 text-xs uppercase tracking-tight mb-4 flex items-center gap-2">
+                                                <svg className="text-indigo-600" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 20v-6M6 20V10M18 20V4"/></svg> Log Real-time
+                                            </h3>
+                                            <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
+                                                {attendanceLogs.length === 0 ? (
+                                                    <div className="h-full flex items-center justify-center opacity-20 text-[10px] font-bold uppercase tracking-widest">Belum ada absen</div>
+                                                ) : (
+                                                    attendanceLogs.slice(0,10).map((log, i) => (
+                                                        <div key={i} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex justify-between items-center animate-in slide-in-from-right duration-300">
+                                                            <div>
+                                                                <h4 className="font-extrabold text-xs text-slate-800">{log.nama}</h4>
+                                                                <p className="text-[9px] font-bold text-slate-400 uppercase">{log.kelas}</p>
+                                                            </div>
+                                                            <span className="bg-white px-2 py-1 rounded-lg border border-slate-100 text-[10px] font-extrabold text-indigo-600">{log.jam}</span>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Persentase per Kelas */}
+                                <div className="bg-white p-8 rounded-[3rem] border border-white shadow-sm">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+                                        <h3 className="text-sm font-extrabold uppercase tracking-tight">Sebaran Kehadiran per Kelas</h3>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                                        {classStats.map(stat => (
+                                            <div key={stat.name} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex flex-col items-center">
+                                                <div className="w-full flex justify-between items-center mb-1">
+                                                    <span className="text-[9px] font-extrabold text-slate-400 uppercase">{stat.name}</span>
+                                                    <span className="text-[9px] font-extrabold text-indigo-600">{stat.percent}%</span>
+                                                </div>
+                                                <div className="text-xl font-extrabold text-slate-800">
+                                                    {stat.present}<span className="text-[10px] text-slate-300 mx-1">/</span>{stat.total}
+                                                </div>
+                                                <div className="w-full h-1.5 bg-slate-200 rounded-full mt-3 overflow-hidden">
+                                                    <div className="h-full bg-indigo-500 rounded-full transition-all duration-1000" style={{width: `${stat.percent}%`}}></div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {role === 'admin' && activeTab === 'admin' && (
+                            <div className="bg-white p-8 rounded-[3rem] border border-white shadow-sm animate-in fade-in duration-500">
+                                <div className="flex justify-between items-center mb-8">
+                                    <h3 className="text-lg font-extrabold text-slate-800 uppercase tracking-tight">Database Siswa</h3>
+                                    <div className="flex gap-2">
+                                        <input type="file" id="csvInput" className="hidden" accept=".csv" onChange={(e) => {
+                                            const file = e.target.files[0];
+                                            const reader = new FileReader();
+                                            reader.onload = (event) => {
+                                                const rows = event.target.result.split('\n').filter(r => r.trim());
+                                                const newData = rows.map(r => {
+                                                    const [id, nama, kelas] = r.split(',');
+                                                    return { studentId: id?.trim(), nama: nama?.trim(), kelas: kelas?.trim() };
+                                                }).filter(s => s.studentId && s.nama);
+                                                setStudents(newData);
+                                                showNotify(`Berhasil impor ${newData.length} siswa`, 'success');
+                                            };
+                                            reader.readAsText(file);
+                                        }} />
+                                        <button onClick={() => document.getElementById('csvInput').click()} className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-extrabold uppercase tracking-widest">Impor CSV</button>
+                                        <button onClick={() => setStudents([])} className="px-4 py-2 bg-red-100 text-red-600 rounded-xl text-[10px] font-extrabold uppercase tracking-widest">Reset</button>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+                                    <input id="newId" placeholder="ID Siswa" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none" />
+                                    <input id="newNama" placeholder="Nama Lengkap" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none" />
+                                    <input id="newKelas" placeholder="Kelas" className="p-4 bg-slate-50 rounded-2xl text-xs font-bold outline-none" />
+                                    <button onClick={() => {
+                                        const id = document.getElementById('newId').value;
+                                        const nm = document.getElementById('newNama').value;
+                                        const kl = document.getElementById('newKelas').value;
+                                        if(id && nm && kl) {
+                                            setStudents([...students, {studentId: id, nama: nm, kelas: kl}]);
+                                            document.getElementById('newId').value = '';
+                                            document.getElementById('newNama').value = '';
+                                            document.getElementById('newKelas').value = '';
+                                        }
+                                    }} className="bg-indigo-600 text-white rounded-2xl font-extrabold text-[10px] uppercase">Tambah</button>
+                                </div>
+                                <div className="max-h-96 overflow-y-auto rounded-3xl border border-slate-100">
+                                    <table className="w-full text-left text-[11px]">
+                                        <thead className="sticky top-0 bg-white shadow-sm">
+                                            <tr>
+                                                <th className="p-4 font-extrabold text-slate-400 uppercase">ID</th>
+                                                <th className="p-4 font-extrabold text-slate-400 uppercase">Nama</th>
+                                                <th className="p-4 font-extrabold text-slate-400 uppercase">Kelas</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {students.map((s, i) => (
+                                                <tr key={i} className="hover:bg-slate-50">
+                                                    <td className="p-4 font-bold text-indigo-600">{s.studentId}</td>
+                                                    <td className="p-4 font-extrabold text-slate-700 uppercase">{s.nama}</td>
+                                                    <td className="p-4 font-bold text-slate-400">{s.kelas}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Modal Manual */}
+                    {isManualModalOpen && (
+                        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm p-8 rounded-[3rem] shadow-2xl relative">
+                                <button onClick={() => setIsManualModalOpen(false)} className="absolute top-6 right-6 text-slate-300">✕</button>
+                                <h3 className="text-lg font-extrabold text-slate-800 mb-6 uppercase">Input Manual</h3>
+                                <input id="manualInput" placeholder="Ketik ID Siswa..." className="w-full p-5 bg-slate-50 rounded-3xl text-sm font-bold outline-none mb-4" autoFocus />
+                                <button onClick={() => {
+                                    handleScanSuccess(document.getElementById('manualInput').value);
+                                    setIsManualModalOpen(false);
+                                }} className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-extrabold text-[10px] uppercase shadow-lg shadow-indigo-200">Proses</button>
+                            </div>
+                        </div>
                     )}
-                  </div>
+
+                    {/* Modal Login Admin */}
+                    {isAdminLoginModalOpen && (
+                        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                            <div className="bg-white w-full max-w-sm p-8 rounded-[3rem] shadow-2xl relative">
+                                <button onClick={() => setIsAdminLoginModalOpen(false)} className="absolute top-6 right-6 text-slate-300">✕</button>
+                                <h3 className="text-lg font-extrabold text-slate-800 mb-6 uppercase tracking-tight">Admin Login</h3>
+                                <form onSubmit={handleAdminLogin}>
+                                    <input name="password" type="password" placeholder="Password: admin123" className="w-full p-5 bg-slate-50 rounded-3xl text-sm font-bold outline-none mb-4" autoFocus />
+                                    <button type="submit" className="w-full bg-slate-900 text-white py-5 rounded-3xl font-extrabold text-[10px] uppercase shadow-xl">Masuk</button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
                 </div>
-              </div>
-            </div>
+            );
+        }
 
-            {/* SEBARAN PER KELAS */}
-            <div className="bg-white p-8 rounded-[40px] border border-white shadow-sm">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 bg-indigo-50 rounded-xl"><Users className="w-5 h-5 text-indigo-600" /></div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">Sebaran Kehadiran per Kelas</h3>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                {classStats.length > 0 ? (
-                  classStats.map((stat) => (
-                    <div key={stat.className} className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex flex-col items-center text-center">
-                      <div className="w-full flex justify-between items-center mb-2 px-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">{stat.className}</span>
-                        <span className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">{stat.percentage}%</span>
-                      </div>
-                      <div className="text-xl font-black text-slate-800">
-                        {stat.present}<span className="text-[10px] text-slate-300 mx-1">/</span>{stat.total}
-                      </div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full mt-3 overflow-hidden border border-white">
-                        <div 
-                          className="bg-indigo-500 h-full transition-all duration-1000 shadow-[0_0_8px_rgba(79,70,229,0.3)]" 
-                          style={{ width: `${stat.percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="col-span-full py-6 text-center text-xs font-bold text-slate-300 uppercase">Data siswa kosong</div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {role === 'admin' && activeTab === 'master' && (
-          <div className="bg-white p-8 rounded-[40px] border border-white shadow-sm animate-in fade-in duration-500">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-2"><ShieldCheck className="text-indigo-600" /> Database Siswa</h3>
-              <div className="flex gap-2 w-full md:w-auto">
-                <button onClick={downloadSampleCSV} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 text-slate-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-200">
-                  <Download className="w-4 h-4" /> Format CSV
-                </button>
-                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" className="hidden" />
-                <button onClick={() => fileInputRef.current.click()} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-3 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-600">
-                  <FileUp className="w-4 h-4" /> Impor CSV
-                </button>
-              </div>
-            </div>
-            
-            <form onSubmit={addStudent} className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-8">
-              <input name="studentId" placeholder="ID Siswa" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-100" required />
-              <input name="nama" placeholder="Nama Lengkap" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-100" required />
-              <input name="kelas" placeholder="Kelas" className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold outline-none focus:ring-2 ring-indigo-100" required />
-              <button type="submit" className="bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest p-4 shadow-lg shadow-indigo-100">Tambah</button>
-            </form>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-slate-100"><th className="pb-4 font-black text-slate-400 uppercase">ID</th><th className="pb-4 font-black text-slate-400 uppercase">Nama</th><th className="pb-4 font-black text-slate-400 uppercase">Kelas</th><th className="pb-4 text-center font-black text-slate-400 uppercase">Hapus</th></tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {students.map(s => (
-                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-4 font-bold text-indigo-600">{s.studentId}</td>
-                      <td className="py-4 font-black text-slate-700 uppercase">{s.nama}</td>
-                      <td className="py-4 font-bold text-slate-400">{s.kelas}</td>
-                      <td className="py-4 text-center"><button onClick={() => deleteStudent(s.id)} className="text-slate-300 hover:text-red-500"><Trash2 className="w-4 h-4 mx-auto" /></button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {role === 'admin' && activeTab === 'settings' && (
-          <div className="max-w-md mx-auto bg-white p-10 rounded-[40px] border border-white shadow-sm text-center">
-            <div className="w-16 h-16 bg-indigo-50 rounded-3xl flex items-center justify-center mx-auto mb-6"><Cloud className="w-8 h-8 text-indigo-600" /></div>
-            <h3 className="text-lg font-black text-slate-800 mb-2 uppercase tracking-tight">Konfigurasi Cloud</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase mb-8 leading-relaxed">Hubungkan ke Google Sheets Apps Script URL untuk sinkronisasi otomatis.</p>
-            <input value={scriptUrl} onChange={(e) => setScriptUrl(e.target.value)} placeholder="URL Apps Script..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-[10px] font-mono mb-4 outline-none" />
-            <button onClick={() => { localStorage.setItem('abs_url', scriptUrl); showNotify("URL Disimpan", "success"); }} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-xl">Update URL</button>
-          </div>
-        )}
-      </main>
-
-      {/* MODAL: LOGIN ADMIN */}
-      {isAdminLoginModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl relative animate-in zoom-in duration-300">
-            <button onClick={() => setIsAdminLoginModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-500"><X className="w-5 h-5" /></button>
-            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4"><Lock className="w-6 h-6 text-indigo-600" /></div>
-            <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tight">Login Administrator</h3>
-            <form onSubmit={handleAdminLogin}>
-              <input name="password" type="password" placeholder="Password Admin..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-sm font-bold outline-none mb-4 focus:ring-2 ring-indigo-100" autoFocus />
-              <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">Konfirmasi</button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: MANUAL INPUT */}
-      {isManualModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl relative animate-in zoom-in duration-300">
-            <button onClick={() => setIsManualModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-500"><X className="w-5 h-5" /></button>
-            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4"><UserPlus className="w-6 h-6 text-indigo-600" /></div>
-            <h3 className="text-lg font-black text-slate-800 mb-6 uppercase tracking-tight">Absen Manual</h3>
-            <form onSubmit={(e) => { e.preventDefault(); handleScanSuccess(e.target.manualId.value); setIsManualModalOpen(false); }}>
-              <input name="manualId" placeholder="Masukkan ID / NIS..." className="w-full p-5 bg-slate-50 border border-slate-100 rounded-3xl text-sm font-bold outline-none mb-4 focus:ring-2 ring-indigo-100" autoFocus />
-              <button type="submit" className="w-full bg-indigo-600 text-white py-5 rounded-3xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100">Proses Kehadiran</button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
